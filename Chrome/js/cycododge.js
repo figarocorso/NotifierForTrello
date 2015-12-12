@@ -16,7 +16,6 @@ $(function(){
 /* Definitions */
 	var app = chrome.app.getDetails(), //details about this app
 		lastUnread = 0, //the total unread since last check
-		sndNewNote = new buzz.sound("/snd/newNote.mp3"), //load the sound for new notifications
 		redirectURLtoMatch = 'trello.com', //match this to redirect instead of open new tab
 		storage = chrome.storage.local,
 		$dom = $(document), //DOM cache
@@ -269,12 +268,6 @@ $(function(){
 		storage.get('lastUnread',function(data){
 			//load data if it exists
 			if(data.hasOwnProperty('lastUnread')){ lastUnread = data.lastUnread; }
-
-			//did the amount change from the last check?
-			if(lastUnread < unread_count){
-				//try playing a sound to notify the user
-				storage.get('sound',function(data){	if(data.sound && !suppressSound){ sndNewNote.play(); }});
-			}
 
 			//update the new total
 			lastUnread = unread_count;
