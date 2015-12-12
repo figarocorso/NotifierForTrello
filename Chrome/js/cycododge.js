@@ -18,128 +18,152 @@ $(function(){
 		lastUnread = 0, //the total unread since last check
 		sndNewNote = new buzz.sound("/snd/newNote.mp3"), //load the sound for new notifications
 		redirectURLtoMatch = 'trello.com', //match this to redirect instead of open new tab
-		storage = chrome.storage.local, //the storage object
+		storage = chrome.storage.local,
 		$dom = $(document), //DOM cache
-		bkg = chrome.extension.getBackgroundPage(), //references to the background page
-		user_data = bkg.user_data || {}, //contains object of user data
+		background_page = chrome.extension.getBackgroundPage(),
+		user_data = background_page.user_data || {}, //contains object of user data
 		note_data = {}, //contains object of note data
-		note_structures = [ //list of classes to show
-		/*0*/['user','user_gone','action','card_name','text-on-board','board_name'],
-		/*1*/['user','user_gone','action','card_name','text-on-board','board_name','mention'],
-		/*2*/['user','user_gone','action','card_name','text-to','list_name','text-on-board','board_name'],
-		/*3*/['user','user_gone','action','board_name'],
-		/*4*/['user','user_gone','action','organization'],
-		/*5*/['user','user_gone','action','card_name','text-in','list_name','text-on-board','board_name'],
-		/*6*/['user','user_gone','action','attached','text-to','card_name','text-on-board','board_name'],
-		/*7*/['user','user_gone','action','checked','text-on-card','card_name','text-on-board','board_name']
-			],
+		note_structures = [
+            ['user', 'user_gone', 'action', 'card_name', 'text-on-board', 'board_name'],
+            ['user', 'user_gone', 'action', 'card_name', 'text-on-board', 'board_name', 'mention'],
+            ['user', 'user_gone', 'action', 'card_name', 'text-to', 'list_name', 'text-on-board', 'board_name'],
+            ['user', 'user_gone', 'action', 'board_name'],
+            ['user', 'user_gone', 'action', 'organization'],
+            ['user', 'user_gone', 'action', 'card_name', 'text-in', 'list_name', 'text-on-board', 'board_name'],
+            ['user', 'user_gone', 'action', 'attached', 'text-to', 'card_name', 'text-on-board', 'board_name'],
+            ['user', 'user_gone', 'action', 'checked', 'text-on-card', 'card_name', 'text-on-board', 'board_name']
+		],
 		note_types = {
-			removedFromCard:{ text:'removed you from the card', structure:note_structures[0] },
-			addedToCard:{ text:'added you to the card', structure:note_structures[0] },
-			mentionedOnCard:{ text:'mentioned you on the card', structure:note_structures[1] },
-			commentCard:{ text:'commented on the card', structure:note_structures[1] },
-			changeCard:{ text:'moved the card', structure:note_structures[2] },
-			createdCard:{ text:'created', structure:note_structures[5] },
-			updateCheckItemStateOnCard:{ text:'checked', structure:note_structures[7] },
+			removedFromCard: {text: 'removed you from the card', structure: note_structures[0]},
+			addedToCard: {text: 'added you to the card', structure: note_structures[0]},
+			mentionedOnCard: {text: 'mentioned you on the card', structure: note_structures[1]},
+			commentCard: {text: 'commented on the card', structure: note_structures[1]},
+			changeCard: {text: 'moved the card', structure: note_structures[2]},
+			createdCard: {text: 'created', structure: note_structures[5]},
+			updateCheckItemStateOnCard: {text: 'checked', structure: note_structures[7]},
 
-			addedMemberToCard:{ text:'joined the card', structure:note_structures[0] },
-			removedMemberFromCard:{ text:'left the card', structure:note_structures[0] },
-			addedAttachmentToCard:{ text:'attached', structure:note_structures[6] },
+			addedMemberToCard: {text: 'joined the card', structure: note_structures[0]},
+			removedMemberFromCard: {text: 'left the card', structure: note_structures[0]},
+			addedAttachmentToCard: {text: 'attached', structure: note_structures[6]},
 
-			addedToBoard:{ text:'added you to the board', structure:note_structures[3] },
-			removedFromBoard:{ text:'removed you from the board', structure:note_structures[3] },
-			invitedToBoard:{ text:'invited you to the board', structure:note_structures[3] },
-			addAdminToBoard:{ text:'made you a co-owner on the board', structure:note_structures[3] },
-			makeAdminOfBoard:{ text:'made you a co-owner on the board', structure:note_structures[3] },
-			closeBoard:{ text:'closed the board', structure:note_structures[3] },
+			addedToBoard: {text: 'added you to the board', structure: note_structures[3]},
+			removedFromBoard: {text: 'removed you from the board', structure: note_structures[3]},
+			invitedToBoard: {text: 'invited you to the board', structure: note_structures[3]},
+			addAdminToBoard: {text: 'made you a co-owner on the board', structure: note_structures[3]},
+			makeAdminOfBoard: {text: 'made you a co-owner on the board', structure: note_structures[3]},
+			closeBoard: {text: 'closed the board', structure: note_structures[3]},
 
-			removedFromOrganization:{ text:'removed you from the organization', structure:note_structures[4] },
-			invitedToOrganization:{ text:'invited you to the organization', structure:note_structures[4] },
-			addAdminToOrganization:{ text:'made you an admin on the organization', structure:note_structures[4] },
-			makeAdminOfOrganization:{ text:'made you an admin of the organization', structure:note_structures[4] }
-			},
-		//create filters from note_types and add unread
-		filters = function(){var obj={};for(var i in note_types){obj[i]=false;}obj.unread=false;return obj;}();
+			removedFromOrganization: {text: 'removed you from the organization', structure: note_structures[4]},
+			invitedToOrganization: {text: 'invited you to the organization', structure: note_structures[4]},
+			addAdminToOrganization: {text: 'made you an admin on the organization', structure: note_structures[4]},
+			makeAdminOfOrganization: {text: 'made you an admin of the organization', structure: note_structures[4]}
+	    },
+
+		filters = function(){
+            var obj = {};
+            for (var i in note_types) {obj[i] = false;}
+            obj.unread = false;
+            return obj;
+        }();
 
 
 /* Immediate Actions */
-document.title = app.name+' v'+app.version+' Popup'; //set the title of the page
-$('#login .title').text(app.name+' v'+app.version); //set the text when asking to login
+    document.title = app.name+' v'+app.version+' Popup';
+    $('#login .title').text(app.name+' v'+app.version); //set the text when asking to login
 
 /* Events */
 
-	//if the login button has been pressed
-	$dom.on('click','#auth_button',bkg.login);
+    $dom.on('click','#auth_button',background_page.login);
 
-	//log the user out
-	$dom.on('click','#btn_logout',function(){
-		Trello.deauthorize(); //logout of popup
-		bkg.Trello.deauthorize(); //logout from background
-		chrome.browserAction.setBadgeText({text:'?'}); //indicate there is an error
-		chrome.browserAction.setTitle({title:app.name+' - Authorization Needed'});
-		$('#logged_in,#logged_out').toggle(); //hide #logged_in and show #logged_out
-	});
+    $dom.on('click','#btn_logout',function(){
+        Trello.deauthorize(); //logout of popup
+        background_page.Trello.deauthorize(); //logout from background
+        chrome.browserAction.setBadgeText({text:'?'}); //indicate there is an error
+        chrome.browserAction.setTitle({title:app.name+' - Authorization Needed'});
+        $('#logged_in,#logged_out').toggle(); //hide #logged_in and show #logged_out
+    });
 
-	//perform actions when marking note as read/unread
-	$dom.on('click','#data .info',function(){
-		var toggle = $(this).find('.check'), //cache this <input>
-			note = $(this).parent('.note'); //the note wrapper
-		//make card unread
-		if(toggle.hasClass('marked')){
-			Trello.put('notifications/'+note.attr('id'),{unread:true},function(s){console.log('success');},function(e){console.log('error');}); //mark unread on trello
-			note.addClass('unread'); //change styling
-			toggle.removeClass('marked').siblings('.help').text('Mark Read'); //mark unread
-			for(var i in note_data){ if(note_data[i].id == note.attr('id')){ note_data[i].unread = true; break; } } //make object unread
-		}else{ //make card read
-			Trello.put('notifications/'+note.attr('id'),{unread:false},function(s){console.log('success');},function(e){console.log('error');}); //mark read on trello
-			note.removeClass('unread'); //change styling
-			toggle.addClass('marked').siblings('.help').text('Mark Unread'); //mark read
-			for(var n in note_data){ if(note_data[n].id == note.attr('id')){ note_data[n].unread = false; break; } } //make object unread
-			if(filters.unread){ note.slideUp(400); } //if showing unread notes, remove this note.
-		}
-		update_unread(true); //update user on number of unread notes
-		if(filters.unread){ $('#viewing_count .total').text($('.note.unread').length); } //if showing unread notes, update total output
-	});
+    //perform actions when marking note as read/unread
+    $dom.on('click','#data .info',function(){
+        var toggle = $(this).find('.check'),
+            note = $(this).parent('.note');
 
-	//mark all notes as read
-	$dom.on('click','#btn_mark_all',function(){
-		//for each unread note only
-		$.each($('.note.unread'),function(){
-			$(this).find('.info').click(); //perform the click action
-		});
-	});
+        if (toggle.hasClass('marked'))
+            mark_as_unread(toggle, note);
+        else
+            mark_as_read(toggle, note);
 
-	//display only unread notes
-	$dom.on('click','#filter_unread',function(){
-		$(this).hide(); //hide this button
-		$('#filter_all').show(); //replace with filter all button
-		output(note_data,{unread:true}); //set the filter
-	});
+        update_unread_total_and_badge(true);
+        update_unread_total_and_badge_number();
+    });
 
-	//display all notes
-	$dom.on('click','#filter_all',function(){
-		$(this).hide(); //hide this button
-		$('#filter_unread').show(); //replace with filter all button
-		output(note_data,{unread:false});
-	});
+    function mark_as_unread(check, note) {
+        Trello.put('notifications/' + note.attr('id'), {unread: true});
+        note.addClass('unread');
+        check.removeClass('marked');
+        check.siblings('.help').text('Mark Read');
+        set_internal_note_status(note.attr('id'), true);
+    }
 
-	//for links on notes, get the href and go there through goToUrl();
-	$dom.on('click','#data .note a',function(e){ console.log($(this).attr('href'));
-		e.preventDefault(); //don't follow the link
-		goToUrl($(this).attr('href')); //navigate to the link
-	});
+    function mark_as_read(check, note) {
+        Trello.put('notifications/' + note.attr('id'), {unread: false});
+        note.removeClass('unread'); //change styling
+        check.addClass('marked').siblings('.help').text('Mark Unread');
+        set_internal_note_status(note.attr('id'), false);
+
+        if (filters.unread)
+            note.slideUp(400);
+    }
+
+    function set_internal_note_status(id, note_status) {
+        for (var i in note_data)
+            if (note_data[i].id == id) {
+                note_data[i].unread = note_status;
+                break;
+            }
+    }
+
+    function update_unread_total_and_badge_number() {
+        if (filters.unread) {
+            $('#viewing_count .total').text($('.note.unread').length);
+        }
+    }
+
+    $dom.on('click', '#btn_mark_all', function() {
+        $.each($('.note.unread'),function() {
+            $(this).find('.info').click();
+        });
+    });
+
+    //display only unread notes
+    $dom.on('click', '#filter_unread', function(){
+        $(this).hide(); //hide this button
+        $('#filter_all').show(); //replace with filter all button
+        output(note_data,{unread:true}); //set the filter
+    });
+
+    //display all notes
+    $dom.on('click', '#filter_all', function(){
+        $(this).hide(); //hide this button
+        $('#filter_unread').show(); //replace with filter all button
+        output(note_data,{unread:false});
+    });
+
+    $dom.on('click',  '#data .note a',  function(e) {
+        goToUrl($(this).attr('href'), e);
+    });
 
 
 /* Functions */
 
 	//output cards
 	function init(){
-		output(bkg.note_data);
-		$('#logged_in,#logged_out').toggle(); //hide #logged_out and show #logged_in
+		output(background_page.note_data);
+		$('#logged_in, #logged_out').toggle();
 	}
 
 	//output the notes to the screen
-	window.output = function(notes,new_filters){ console.log(notes, new_filters);
+	window.output = function(notes,new_filters){
 		note_data = notes; //update global object
 		$('#data').empty(); //clear the current set of notes
 		var urlRegex =/(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig; //detect url
@@ -222,13 +246,10 @@ $('#login .title').text(app.name+' v'+app.version); //set the text when asking t
 					for(var ind in note_types[note.type].structure){
 						$note.find('.message .'+note_types[note.type].structure[ind]).show(); //make visisble
 					}
-				}else{
-					console.log(note);
 				}
 			}catch(e){
 				$note.find('.message .card_name').show();
 				$note.find('.message .unknown_type').append('<br />').show();
-				console.log(note); //log a note that has no programmed structure
 			}
 
 			//output note to user
@@ -236,18 +257,15 @@ $('#login .title').text(app.name+' v'+app.version); //set the text when asking t
 		}
 
 		//update note counts
-		update_unread();
+		update_unread_total_and_badge();
 		if(!$('#data .note').length){ $('#data').html('<div style="margin-top:20px;">No notifications for this filter!</div>'); } //if no notes displayed
 		$('#viewing_count .total').text($('.note').length); //total output
-	};
+	}; // end output notes to screen
 
-	//update the total of unread notes on the page and badge
-	function update_unread(suppressSound){
-		//find each unread note
+	function update_unread_total_and_badge(suppressSound) {
 		var unread_count = 0;
-		$.each($('.note.unread'),function(){ unread_count++; }); //add to total count of unread items
+		$.each($('.note.unread'), function(){ unread_count++; });
 
-		//load the last unread total
 		storage.get('lastUnread',function(data){
 			//load data if it exists
 			if(data.hasOwnProperty('lastUnread')){ lastUnread = data.lastUnread; }
@@ -273,17 +291,16 @@ $('#login .title').text(app.name+' v'+app.version); //set the text when asking t
 		if(!unread_count){ $('#unread_count').addClass('zero'); }else{ $('#unread_count').removeClass('zero'); } //change color if unread == 0
 	}
 
-	//send user to link
-	function goToUrl(myURL){console.log(myURL);
+	function goToUrl(new_url, e){
+        e.preventDefault();
+
 		//find the current tab
-		chrome.tabs.getSelected(null,function(tab) {
-			//if the current tab is on the correct site AND the myURL matches too
-			if(tab.url.indexOf(redirectURLtoMatch) > -1 && myURL.indexOf(redirectURLtoMatch) > -1){
-				// go to this url via the current tab
-				chrome.tabs.update(tab.id,{url:myURL});
-			}else{
-				chrome.tabs.create({url:myURL});
-			}
+		chrome.tabs.getSelected(null, function(tab) {
+			//if the current tab is on the correct site AND the new_url matches too
+			if(tab.url.indexOf(redirectURLtoMatch) > -1 && new_url.indexOf(redirectURLtoMatch) > -1)
+				chrome.tabs.update(tab.id, {url: new_url});
+			else
+				chrome.tabs.create({url: new_url});
 		});
 	}
 

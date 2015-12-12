@@ -20,7 +20,7 @@ http://twitter.com/cycododge
 var request_limit = 50, //number of notes to return
 	refresh_minutes = 1, //amount of minutes to wait before next refresh
 	_popup = 'popup.html', //the file name of the popup page
-	refresh_time = 60 * refresh_minutes * 1000; //refresh data in X seconds
+	refresh_time = refresh_minutes * 60 * 1000; //refresh data in X seconds
 
 //system
 var sndNewNote = new buzz.sound("/snd/newNote.mp3"), //load the sound for new notifications
