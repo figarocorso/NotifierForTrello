@@ -20,11 +20,10 @@ http://twitter.com/cycododge
 var request_limit = 50, //number of notes to return
 	refresh_minutes = 1, //amount of minutes to wait before next refresh
 	_popup = 'popup.html', //the file name of the popup page
-	refresh_time = 60 * refresh_minutes * 1000; //refresh data in X seconds
+	refresh_time = refresh_minutes * 60 * 1000; //refresh data in X seconds
 
 //system
-var sndNewNote = new buzz.sound("/snd/newNote.mp3"), //load the sound for new notifications
-	user_data = {}, //contains object of user data
+var user_data = {}, //contains object of user data
 	note_data = {}, //contains object of note data
 	app = chrome.app.getDetails(), //manifest description
 	storage = chrome.storage.local, //the local storage object
@@ -183,12 +182,6 @@ function update_badge(){
 	storage.get('lastUnread',function(data){
 		//load the value if it exists
 		if(data.hasOwnProperty('lastUnread')){ lastUnread = data.lastUnread; }
-
-		//did the amount change from the last check?
-		if(lastUnread < count){
-			//try playing a sound to notify the user
-			storage.get('sound',function(data){	if(data.sound){	sndNewNote.play(); }});
-		}
 
 		//update the new total
 		lastUnread = count;
